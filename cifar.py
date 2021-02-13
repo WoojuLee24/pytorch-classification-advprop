@@ -32,7 +32,7 @@ import torchvision.datasets as datasets
 from torch.optim.lr_scheduler import _LRScheduler
 
 from attacker import NoOpAttacker, PGDAttacker
-import net
+import net_cifar
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 from utils.fastaug.fastaug import FastAugmentation
 from utils.fastaug.augmentations import Lighting
@@ -48,7 +48,7 @@ to_adv_status = partial(to_status, status='adv')
 to_mix_status = partial(to_status, status='mix')
 
 # Models
-default_model_names = sorted(name for name in net.__dict__ if name.islower() and not name.startswith('__') and callable(net.__dict__[name]) and not name.startswith("to_") and not name.startswith("partial"))
+default_model_names = sorted(name for name in net_cifar.__dict__ if name.islower() and not name.startswith('__') and callable(net_cifar.__dict__[name]) and not name.startswith("to_") and not name.startswith("partial"))
 
 model_names = default_model_names
 
@@ -108,7 +108,7 @@ parser.add_argument('--gpu-id', default='0', type=str,
 #Add by YW
 parser.add_argument('--warm', default=5, type=int, help='warm up epochs')
 parser.add_argument('--warm_lr', default=0.1, type=float, help='warm up start lr')
-parser.add_argument('--num_classes', default=200, type=int, help='number of classes')
+parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--mixbn', action='store_true', help='use mixbn')
 parser.add_argument('--lr_schedule', type=str, default='step', choices=['step', 'cos'])
 parser.add_argument('--fastaug', action='store_true')
@@ -147,62 +147,37 @@ def main():
     if args.attack_iter == 0:
         attacker = NoOpAttacker()
     else:
-        attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size, prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+        attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size,
+                               num_classes=args.num_classes, prob_start_from_clean=0.2 if not args.evaluate else 0.0)
 
     if not os.path.isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
 
-    # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
-    
-    # the mean and variant don't have too much influence
-    # (pic - 0.5) / 0.5 just make it easier for attacker.
-
-    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-    #                                  std=[0.229, 0.224, 0.225])
-    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                                     std=[0.5, 0.5, 0.5])
-
+    print('==> Preparing data..')
     transform_train = transforms.Compose([
-            transforms.RandomSizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
     if args.fastaug:
         transform_train.transforms.insert(0, FastAugmentation())
-    if args.lighting:
-        __imagenet_pca = {
-            'eigval': np.array([0.2175, 0.0188, 0.0045]),
-            'eigvec': np.array([
-                [-0.5675,  0.7192,  0.4009],
-                [-0.5808, -0.0045, -0.8140],
-                [-0.5836, -0.6948,  0.4203],
-            ])
-        }
-        transform_train = transforms.Compose([
-            transforms.RandomSizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            Lighting(0.1, __imagenet_pca['eigval'], __imagenet_pca['eigvec']),
-            normalize
-        ])
-    train_dataset = datasets.ImageFolder(traindir, transform_train)
-    train_loader = torch.utils.data.DataLoader((train_dataset),
-        batch_size=args.train_batch, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
 
-    val_transforms = [
-            transforms.ToTensor(),
-            normalize,
-        ]
-    if not args.already224:
-        val_transforms = [transforms.Scale(256), transforms.CenterCrop(224)] + val_transforms
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    train_dataset = datasets.CIFAR10(root='/ws/data', train=True, download=True, transform=transform_train)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.train_batch, shuffle=True, num_workers=args.workers, pin_memory=True)
+    val_dataset = datasets.CIFAR10(root='/ws/data', train=False, download=True, transform=transform_test)
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose(val_transforms)),
-        batch_size=args.test_batch, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        val_dataset, batch_size=args.test_batch, shuffle=False, num_workers=args.workers, pin_memory=True)
+
+    classes = ('plane', 'car', 'bird', 'cat', 'deer',
+               'dog', 'frog', 'horse', 'ship', 'truck')
 
     # create model
     print("=> creating model '{}'".format(args.arch))
@@ -210,7 +185,8 @@ def main():
         norm_layer = MixBatchNorm2d
     else:
         norm_layer = None
-    model = net.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer)
+
+    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer)
     model.set_attacker(attacker)
     model.set_mixbn(args.mixbn)
 

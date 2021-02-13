@@ -31,7 +31,7 @@ class NoOpAttacker():
 
 
 class PGDAttacker():
-    def __init__(self, num_iter, epsilon, step_size, kernel_size=15, prob_start_from_clean=0.0, translation=False, device='cuda:0'):
+    def __init__(self, num_iter, epsilon, step_size, kernel_size=15, prob_start_from_clean=0.0, translation=False, num_classes=1000, device='cuda:0'):
         step_size = max(step_size, epsilon / num_iter)
         self.num_iter = num_iter
         self.epsilon = epsilon * IMAGE_SCALE
@@ -39,6 +39,7 @@ class PGDAttacker():
         self.prob_start_from_clean = prob_start_from_clean
         self.device=device
         self.translation = translation
+        self.num_classes = num_classes
         if translation:
             # this is equivalent to deepth wise convolution
             # details can be found in the docs of Conv2d.
@@ -47,9 +48,13 @@ class PGDAttacker():
             self.gkernel = get_kernel(kernel_size, nsig=3, device=self.device).to(self.device)
             self.conv.weight = self.gkernel
     
+    # def _create_random_target(self, label):
+    #     label_offset = torch.randint_like(label, low=0, high=1000)
+    #     return (label + label_offset) % 1000
+
     def _create_random_target(self, label):
-        label_offset = torch.randint_like(label, low=0, high=1000)
-        return (label + label_offset) % 1000
+        label_offset = torch.randint_like(label, low=0, high=self.num_classes)
+        return (label + label_offset) % self.num_classes
 
     def attack(self, image_clean, label, model, original=False):
         if original:
