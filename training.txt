@@ -1,0 +1,6 @@
+baseline_cos
+python cifar.py --attack-iter 0 -a resnet50 --train-batch 128 --num_classes 10 --data /ws/data --epochs 100 -c
+/ws/external/checkpoints/cifar10/resnet50_cos_e100_lr0.1 --gpu-id 0,1 --lr_schedule cos
+mixbn_cos 
+python cifar.py --attack-epsilon 1 --attack-iter 2  --attack-step-size 1 -a resnet50 --train-batch 128 --num_classes 10 --data /ws/data --epochs 100 -c
+/ws/external/checkpoints/cifar10/resnet50_mixbn_cos_e100_lr0.1_eps1_i2_s1 --gpu-id 0, 1 --lr_schedule cos --mixbn
