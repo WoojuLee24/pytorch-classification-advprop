@@ -122,6 +122,7 @@ parser.add_argument('--smoothing', type=float, default=0)
 parser.add_argument('--attack-iter', help='Adversarial attack iteration', type=int, default=0)
 parser.add_argument('--attack-epsilon', help='Adversarial attack maximal perturbation', type=float, default=1.0)
 parser.add_argument('--attack-step-size', help='Adversarial attack step size', type=float, default=1.0)
+parser.add_argument('--dct-ratio', help='frequency range', type=float, default=1.0)
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
@@ -186,14 +187,14 @@ def main():
     else:
         norm_layer = None
 
-    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer)
+    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, dct_ratio=args.dct_ratio)
     model.set_attacker(attacker)
     model.set_mixbn(args.mixbn)
 
     model = torch.nn.DataParallel(model).cuda()
 
     cudnn.benchmark = True
-    print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters())/1000000.0))
+    print('    Total params: %.2f M' % (sum(p.numel() for p in model.parameters())/1000000.0))
 
     # define loss function (criterion) and optimizer
     if args.smoothing == 0:

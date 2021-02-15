@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn 
 import torch.nn.functional as F
+import torch_dct as dct
 IMAGE_SCALE = 2.0/255
 
 
@@ -58,9 +59,9 @@ class PGDAttacker():
 
     def attack(self, image_clean, label, model, original=False):
         if original:
-            target_label = label
+            target_label = label    # untargeted
         else:
-            target_label = self._create_random_target(label)
+            target_label = self._create_random_target(label)    # targeted
         lower_bound = torch.clamp(image_clean - self.epsilon, min=-1., max=1.)
         upper_bound = torch.clamp(image_clean + self.epsilon, min=-1., max=1.)
 
@@ -80,11 +81,61 @@ class PGDAttacker():
                                     retain_graph=False, create_graph=False)[0]
             if self.translation:
                 g = self.conv(g)
+            # Linf step
             if original:
-                adv = adv + torch.sign(g)*self.step_size
+                adv = adv + torch.sign(g) * self.step_size  # untargeted
             else:
-                adv = adv - torch.sign(g) * self.step_size
+                adv = adv - torch.sign(g) * self.step_size  # targeted
+            # Linf project
             adv = torch.where(adv > lower_bound, adv, lower_bound)
             adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
         
+        return adv, target_label
+
+    def dct_attack(self, image_clean, label, model, original=False, dct_ratio=0.25):
+        if original:
+            target_label = label  # untargeted
+        else:
+            target_label = self._create_random_target(label)  # targeted
+        lower_bound = torch.clamp(image_clean - self.epsilon, min=-1., max=1.)
+        upper_bound = torch.clamp(image_clean + self.epsilon, min=-1., max=1.)
+
+        ori_images = image_clean.clone().detach()
+
+        # frequency domain
+        init_start = torch.empty_like(image_clean).uniform_(-self.epsilon, self.epsilon)
+        B, C, H, W = image_clean.size()
+        # dct_ratio
+        init_start[:, :, int(dct_ratio * H):, int(dct_ratio * W):] = 0
+        # idct 2d
+        init_start = dct.idct_2d(init_start)
+
+        start_from_noise_index = (torch.randn([]) > self.prob_start_from_clean).float()
+        start_adv = image_clean + start_from_noise_index * init_start
+
+        adv = start_adv
+        for i in range(self.num_iter):
+            adv.requires_grad = True
+            logits = model(adv)
+            losses = F.cross_entropy(logits, target_label)
+            g = torch.autograd.grad(losses, adv,
+                                    retain_graph=False, create_graph=False)[0]
+            if self.translation:
+                g = self.conv(g)
+            # Linf step
+            if original:
+                adv = adv + torch.sign(g) * self.step_size  # untargeted
+            else:
+                adv = adv - torch.sign(g) * self.step_size  # targeted
+            # Linf freq project
+            dct_adv = dct.dct_2d(adv)
+            dct_adv[:, :, int(dct_ratio * H):, int(dct_ratio * W):] = 0
+            adv_modi = dct.idct_2d(dct_adv)
+            # visualization
+            # adv_numpy = (image_clean - adv).data.cpu().numpy()
+            # adv_modi_numpy = (image_clean - adv_modi).data.cpu().numpy()
+            # Linf project
+            adv = torch.where(adv > lower_bound, adv, lower_bound)
+            adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
+
         return adv, target_label

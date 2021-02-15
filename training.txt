@@ -4,3 +4,11 @@ python cifar.py --attack-iter 0 -a resnet50 --train-batch 128 --num_classes 10 -
 mixbn_cos 
 python cifar.py --attack-epsilon 1 --attack-iter 2  --attack-step-size 1 -a resnet50 --train-batch 128 --num_classes 10 --data /ws/data --epochs 100 -c
 /ws/external/checkpoints/cifar10/resnet50_mixbn_cos_e100_lr0.1_eps1_i2_s1 --gpu-id 0, 1 --lr_schedule cos --mixbn
+mixbn_cos_dct_ratio0.25
+python cifar.py --attack-epsilon 1 --attack-iter 2  --attack-step-size 1 -a resnet50 --train-batch 128 --num_classes 10 --data /ws/data --epochs 100 -c
+/ws/external/checkpoints/cifar10/resnet50_mixbn_cos_e100_lr0.1_eps1_i2_s1 --gpu-id 0, 1 --lr_schedule cos --mixbn --dct-ratio 0.25
+
+baseline_cos
+python imagenet.py --attack-iter 0 -a resnet50 --train-batch 128 --num_classes 1000 --data /ws/data/imagenet --epochs 100 -c /ws/external/checkpoints/imagenet/resnet50_cos_e100_lr0.1 --gpu-id 0,1 --lr_schedule cos
+mixbn_cos
+python imagenet.py --attack-epsilon 1 --attack-iter 2  --attack-step-size 1 -a resnet50 --train-batch 128 --num_classes 1000 --data /ws/data/imagenet --epochs 100 -c /ws/external/checkpoints/imagenet/resnet50_mixbn_cos_e100_lr0.1_eps1_i2_s1 --gpu-id 0,1 --lr_schedule cos --mixbn
