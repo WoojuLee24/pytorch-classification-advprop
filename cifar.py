@@ -1,6 +1,6 @@
 '''
-Training script for ImageNet
-Copyright (c) Wei YANG, 2017
+Training script for Cifar10
+Copyright (c) WooJu Lee, 2017
 '''
 from __future__ import print_function
 
@@ -53,7 +53,7 @@ default_model_names = sorted(name for name in net_cifar.__dict__ if name.islower
 model_names = default_model_names
 
 # Parse arguments
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+parser = argparse.ArgumentParser(description='PyTorch Cifar10 Training')
 
 # Datasets
 parser.add_argument('-d', '--data', default='path to dataset', type=str)
@@ -101,6 +101,8 @@ parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
 parser.add_argument('--manualSeed', type=int, help='manual seed')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
+parser.add_argument('-ec', '--evaluate-c', action='store_true',
+                    help='evaluate corruption model on validation set')
 #Device options
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
@@ -122,7 +124,8 @@ parser.add_argument('--smoothing', type=float, default=0)
 parser.add_argument('--attack-iter', help='Adversarial attack iteration', type=int, default=0)
 parser.add_argument('--attack-epsilon', help='Adversarial attack maximal perturbation', type=float, default=1.0)
 parser.add_argument('--attack-step-size', help='Adversarial attack step size', type=float, default=1.0)
-parser.add_argument('--dct-ratio', help='frequency range', type=float, default=1.0)
+parser.add_argument('--dct-ratio-low', help='frequency range', type=float, default=0.0)
+parser.add_argument('--dct-ratio-high', help='frequency range', type=float, default=1.0)
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
@@ -187,7 +190,8 @@ def main():
     else:
         norm_layer = None
 
-    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, dct_ratio=args.dct_ratio)
+    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer,
+                                          dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high)
     model.set_attacker(attacker)
     model.set_mixbn(args.mixbn)
 
@@ -209,7 +213,7 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
 
     # Resume
-    title = 'ImageNet-' + args.arch
+    title = 'Cifar-' + args.arch
     if args.resume:
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
@@ -246,6 +250,12 @@ def main():
     if args.evaluate:
         print('\nEvaluation only')
         test_loss, test_acc = test(val_loader, model, criterion, start_epoch, use_cuda)
+        print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
+        return
+
+    if args.evaluate_c:
+        print('\nEvaluation only')
+        test_loss, test_acc = test_c(model, criterion, start_epoch, use_cuda)
         print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
         return
     
@@ -449,6 +459,35 @@ def test(val_loader, model, criterion, epoch, use_cuda):
         bar.next()
     bar.finish()
     return (losses.avg, top1.avg)
+
+
+def test_c(test_data, model, criterion, epoch, use_cuda):
+    """Evaluate network on given corrupted dataset."""
+    corruption_accs = []
+    CORRUPTIONS = [
+        'gaussian_noise', 'shot_noise', 'impulse_noise', 'defocus_blur',
+        'glass_blur', 'motion_blur', 'zoom_blur', 'snow', 'frost', 'fog',
+        'brightness', 'contrast', 'elastic_transform', 'pixelate',
+        'jpeg_compression'
+    ]
+    for corruption in CORRUPTIONS:
+        # Reference to original data is mutated
+        test_data.data = np.load(base_path + corruption + '.npy')
+        test_data.targets = torch.LongTensor(np.load(base_path + 'labels.npy'))
+
+        test_loader = torch.utils.data.DataLoader(
+            test_data,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=True)
+
+        test_loss, test_acc = test(test_loader, model, criterion, epoch, use_cuda)
+        corruption_accs.append(test_acc)
+        print('{}\n\tTest Loss {:.3f} | Test Error {:.3f}'.format(
+            corruption, test_loss, 100 - 100. * test_acc))
+
+    return np.mean(corruption_accs)
 
 
 def save_checkpoint(state, is_best, checkpoint='checkpoint', filename='checkpoint.pth.tar'):

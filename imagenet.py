@@ -474,6 +474,39 @@ def test(val_loader, model, criterion, epoch, use_cuda):
     return (losses.avg, top1.avg)
 
 
+def test_c(test_data, model, criterion, epoch, use_cuda):
+    """Evaluate network on given corrupted dataset."""
+    corruption_accs = []
+    CORRUPTIONS = [
+        'gaussian_noise', 'shot_noise', 'impulse_noise', 'defocus_blur',
+        'glass_blur', 'motion_blur', 'zoom_blur', 'snow', 'frost', 'fog',
+        'brightness', 'contrast', 'elastic_transform', 'pixelate',
+        'jpeg_compression'
+    ]
+    for corruption in CORRUPTIONS:
+        print(corruption)
+        for s in range(1, 6):
+            valdir = os.path.join()
+            val_loader =
+        # Reference to original data is mutated
+        test_data.data = np.load(base_path + corruption + '.npy')
+        test_data.targets = torch.LongTensor(np.load(base_path + 'labels.npy'))
+
+        test_loader = torch.utils.data.DataLoader(
+            test_data,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=True)
+
+        test_loss, test_acc = test(test_loader, model, criterion, epoch, use_cuda)
+        corruption_accs.append(test_acc)
+        print('{}\n\tTest Loss {:.3f} | Test Error {:.3f}'.format(
+            corruption, test_loss, 100 - 100. * test_acc))
+
+    return np.mean(corruption_accs)
+
+
 def save_checkpoint(state, is_best, checkpoint='checkpoint', filename='checkpoint.pth.tar'):
     filepath = os.path.join(checkpoint, filename)
     torch.save(state, filepath)

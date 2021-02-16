@@ -238,13 +238,14 @@ class AdvResNet(ResNet):
     '''
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, attacker=NoOpAttacker(), dct_ratio=1.0):
+                 norm_layer=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0):
         super().__init__(block, layers, num_classes=num_classes, zero_init_residual=zero_init_residual,
                  groups=groups, width_per_group=width_per_group, replace_stride_with_dilation=replace_stride_with_dilation,
                  norm_layer=norm_layer)
         self.attacker = attacker
         self.mixbn = False
-        self.dct_ratio = dct_ratio
+        self.dct_ratio_low = dct_ratio_low
+        self.dct_ratio_high = dct_ratio_high
 
     def set_attacker(self, attacker):
         self.attacker = attacker
@@ -265,7 +266,9 @@ class AdvResNet(ResNet):
             else:
 
                 # aux_images, _ = self.attacker.attack(x, labels, self._forward_impl)
-                aux_images, _ = self.attacker.dct_attack(x, labels, self._forward_impl, dct_ratio=self.dct_ratio)
+                aux_images, _ = self.attacker.dct_attack(x, labels, self._forward_impl,
+                                                         dct_ratio_low=self.dct_ratio_low,
+                                                         dct_ratio_high=self.dct_ratio_high)
                 images = torch.cat([x, aux_images], dim=0)
                 targets = torch.cat([labels, labels], dim=0)
             self.train()
