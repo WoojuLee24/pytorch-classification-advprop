@@ -255,7 +255,7 @@ def main():
 
     if args.evaluate_c:
         print('\nEvaluation only')
-        test_loss, test_acc = test_c(model, criterion, start_epoch, use_cuda)
+        test_loss, test_acc = test_c(val_dataset, model, criterion, start_epoch, use_cuda)
         print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
         return
     
@@ -472,20 +472,20 @@ def test_c(test_data, model, criterion, epoch, use_cuda):
     ]
     for corruption in CORRUPTIONS:
         # Reference to original data is mutated
-        test_data.data = np.load(base_path + corruption + '.npy')
-        test_data.targets = torch.LongTensor(np.load(base_path + 'labels.npy'))
+        test_data.data = np.load(os.path.join(args.data, "cifar10-c", corruption + '.npy'))
+        test_data.targets = torch.LongTensor(np.load(os.path.join(args.data, "cifar10-c", 'labels.npy')))
 
         test_loader = torch.utils.data.DataLoader(
             test_data,
-            batch_size=args.eval_batch_size,
+            batch_size=args.test_batch,
             shuffle=False,
-            num_workers=args.num_workers,
+            num_workers=args.workers,
             pin_memory=True)
 
         test_loss, test_acc = test(test_loader, model, criterion, epoch, use_cuda)
         corruption_accs.append(test_acc)
         print('{}\n\tTest Loss {:.3f} | Test Error {:.3f}'.format(
-            corruption, test_loss, 100 - 100. * test_acc))
+            corruption, test_loss, 100 - test_acc))
 
     return np.mean(corruption_accs)
 

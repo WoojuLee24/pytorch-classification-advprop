@@ -266,7 +266,7 @@ class AdvResNet(ResNet):
             else:
 
                 # aux_images, _ = self.attacker.attack(x, labels, self._forward_impl)
-                aux_images, _ = self.attacker.dct_attack(x, labels, self._forward_impl,
+                aux_images, _ = self.attacker.dct_attack3(x, labels, self._forward_impl,
                                                          dct_ratio_low=self.dct_ratio_low,
                                                          dct_ratio_high=self.dct_ratio_high)
                 images = torch.cat([x, aux_images], dim=0)

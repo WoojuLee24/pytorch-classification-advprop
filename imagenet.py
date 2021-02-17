@@ -101,6 +101,8 @@ parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
 parser.add_argument('--manualSeed', type=int, help='manual seed')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
+parser.add_argument('-ec', '--evaluate-c', action='store_true',
+                    help='evaluate corruption model on validation set')
 #Device options
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
@@ -155,6 +157,7 @@ def main():
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
+    cordir = args.data + "-c"
     
     # the mean and variant don't have too much influence
     # (pic - 0.5) / 0.5 just make it easier for attacker.
@@ -188,21 +191,23 @@ def main():
             Lighting(0.1, __imagenet_pca['eigval'], __imagenet_pca['eigvec']),
             normalize
         ])
-    train_dataset = datasets.ImageFolder(traindir, transform_train)
-    train_loader = torch.utils.data.DataLoader((train_dataset),
-        batch_size=args.train_batch, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
 
     val_transforms = [
-            transforms.ToTensor(),
-            normalize,
-        ]
+        transforms.ToTensor(),
+        normalize,
+    ]
     if not args.already224:
         val_transforms = [transforms.Scale(256), transforms.CenterCrop(224)] + val_transforms
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose(val_transforms)),
-        batch_size=args.test_batch, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+
+
+    train_dataset = datasets.ImageFolder(traindir, transform_train)
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=args.train_batch, shuffle=True,
+                                               num_workers=args.workers, pin_memory=True)
+    val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_transforms))
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                             batch_size=args.test_batch, shuffle=False,
+                                             num_workers=args.workers, pin_memory=True)
 
     # create model
     print("=> creating model '{}'".format(args.arch))
@@ -269,6 +274,12 @@ def main():
     if args.evaluate:
         print('\nEvaluation only')
         test_loss, test_acc = test(val_loader, model, criterion, start_epoch, use_cuda)
+        print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
+        return
+
+    if args.evaluate_c:
+        print('\nEvaluation only')
+        test_loss, test_acc = test_c(cordir, model, criterion, start_epoch, use_cuda)
         print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
         return
     
@@ -474,35 +485,27 @@ def test(val_loader, model, criterion, epoch, use_cuda):
     return (losses.avg, top1.avg)
 
 
-def test_c(test_data, model, criterion, epoch, use_cuda):
+def test_c(c_path, model, criterion, epoch, use_cuda):
     """Evaluate network on given corrupted dataset."""
     corruption_accs = []
-    CORRUPTIONS = [
-        'gaussian_noise', 'shot_noise', 'impulse_noise', 'defocus_blur',
-        'glass_blur', 'motion_blur', 'zoom_blur', 'snow', 'frost', 'fog',
-        'brightness', 'contrast', 'elastic_transform', 'pixelate',
-        'jpeg_compression'
-    ]
-    for corruption in CORRUPTIONS:
-        print(corruption)
-        for s in range(1, 6):
-            valdir = os.path.join()
-            val_loader =
-        # Reference to original data is mutated
-        test_data.data = np.load(base_path + corruption + '.npy')
-        test_data.targets = torch.LongTensor(np.load(base_path + 'labels.npy'))
-
-        test_loader = torch.utils.data.DataLoader(
-            test_data,
-            batch_size=args.eval_batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
-            pin_memory=True)
-
-        test_loss, test_acc = test(test_loader, model, criterion, epoch, use_cuda)
-        corruption_accs.append(test_acc)
-        print('{}\n\tTest Loss {:.3f} | Test Error {:.3f}'.format(
-            corruption, test_loss, 100 - 100. * test_acc))
+    category_list = sorted(os.listdir(c_path))
+    for category in category_list:
+        category_path = os.path.join(c_path, category)
+        corruption_list = sorted(os.listdir(category_path))
+        for corruption in corruption_list:
+            corruption_path = os.path.join(category_path, corruption)
+            degree_list = sorted(os.listdir(corruption_path))
+            for degree in degree_list:
+                degree_path = os.path.join(corruption_path, degree)
+                test_loader = torch.utils.data.DataLoader(degree_path,
+                                                          batch_size=args.test_batch,
+                                                          shuffle=False,
+                                                          num_workers=args.workers,
+                                                          pin_memory=True)
+                test_loss, test_acc = test(test_loader, model, criterion, epoch, use_cuda)
+                corruption_accs.append(test_acc)
+                print('{}\n\tTest Loss {:.3f} | Test Error {:.3f}'.format(
+                    corruption, test_loss, 100 - 100. * test_acc))
 
     return np.mean(corruption_accs)
 
