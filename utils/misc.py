@@ -8,10 +8,13 @@ import os
 import sys
 import time
 import math
+import numpy as np
+import matplotlib.pyplot as plt
 
 import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd import Variable
+import torchvision.transforms as transforms
 
 __all__ = ['get_mean_and_std', 'init_params', 'mkdir_p', 'AverageMeter']
 
@@ -74,3 +77,38 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+def get_axis(axarr, H, W, i, j):
+    H, W = H - 1, W - 1
+    if not (H or W):
+        ax = axarr
+    elif not (H and W):
+        ax = axarr[max(i, j)]
+    else:
+        ax = axarr[i][j]
+    return ax
+
+
+def show_image_row(xlist, ylist=None, fontsize=12, size=(2.5, 2.5), tlist=None, filename=None):
+    H, W = len(xlist), len(xlist[0])
+    fig, axarr = plt.subplots(H, W, figsize=(size[0] * W, size[1] * H))
+    unnormalize = transforms.Normalize((-0.4914 / 0.2023, -0.4822 / 0.1994, -0.4465 / 0.2010), (1 / 0.2023, 1 / 0.1994, 1 / 0.2010))
+    for w in range(W):
+        for h in range(H):
+            # unnormalize
+            xlist[h][w] = unnormalize(xlist[h][w])
+            ax = get_axis(axarr, H, W, h, w)
+            ax.imshow(xlist[h][w].permute(1, 2, 0))
+            ax.xaxis.set_ticks([])
+            ax.yaxis.set_ticks([])
+            ax.xaxis.set_ticklabels([])
+            ax.yaxis.set_ticklabels([])
+            if ylist and w == 0:
+                ax.set_ylabel(ylist[h], fontsize=fontsize)
+            if tlist:
+                ax.set_title(tlist[h][w], fontsize=fontsize)
+    if filename is not None:
+        plt.savefig(filename, bbox_inches='tight')
+    plt.show()
+
