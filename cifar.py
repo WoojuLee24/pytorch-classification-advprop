@@ -36,6 +36,8 @@ import net_cifar
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 from utils.fastaug.fastaug import FastAugmentation
 from utils.fastaug.augmentations import Lighting
+from utils.misc import show_image_row
+from utils.label_maps import CLASS_DICT
 
 
 def to_status(m, status):
@@ -103,6 +105,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-ec', '--evaluate-c', action='store_true',
                     help='evaluate corruption model on validation set')
+parser.add_argument('--make-adv', action='store_true',
+                    help='evaluation mode, make adversarial example')
 #Device options
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
@@ -122,6 +126,7 @@ parser.add_argument('--lighting', action='store_true')
 parser.add_argument('--smoothing', type=float, default=0)
 # added by HYC, attacker options
 parser.add_argument('--attack-iter', help='Adversarial attack iteration', type=int, default=0)
+parser.add_argument('--attack-mode', help='Adversarial attack mode', type=str, default='pgd')
 parser.add_argument('--attack-epsilon', help='Adversarial attack maximal perturbation', type=float, default=1.0)
 parser.add_argument('--attack-step-size', help='Adversarial attack step size', type=float, default=1.0)
 parser.add_argument('--dct-ratio-low', help='frequency range', type=float, default=0.0)
@@ -152,7 +157,9 @@ def main():
         attacker = NoOpAttacker()
     else:
         attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size,
-                               num_classes=args.num_classes, prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+                               num_classes=args.num_classes,
+                               prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+
 
     if not os.path.isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
@@ -191,7 +198,8 @@ def main():
         norm_layer = None
 
     model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer,
-                                          dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high)
+                                          dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
+                                          make_adv=args.make_adv, attack_mode=args.attack_mode)
     model.set_attacker(attacker)
     model.set_mixbn(args.mixbn)
 
@@ -252,6 +260,11 @@ def main():
         test_loss, test_acc = test(val_loader, model, criterion, start_epoch, use_cuda)
         print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
         return
+
+    if args.make_adv:
+        print("\nMake adversarial example")
+        make_adv(val_loader, model, criterion, start_epoch, use_cuda)
+
 
     if args.evaluate_c:
         print('\nEvaluation only')
@@ -459,6 +472,34 @@ def test(val_loader, model, criterion, epoch, use_cuda):
         bar.next()
     bar.finish()
     return (losses.avg, top1.avg)
+
+
+def make_adv(val_loader, model, criterion, epoch, use_cuda):
+
+    # switch to evaluate mode
+    model.eval()
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    for batch_idx, (inputs, targets) in enumerate(val_loader):
+        # measure data loading time
+
+        if use_cuda:
+            inputs, targets = inputs.cuda(), targets.cuda()
+        inputs, targets = torch.autograd.Variable(inputs, volatile=True), torch.autograd.Variable(targets)
+
+        im, adv, im_adv, outputs, outputs_adv, targets = model(inputs, targets)
+
+
+        # label argmax
+        label_pred = torch.argmax(outputs, dim=1)
+        label_pred_adv = torch.argmax(outputs_adv, dim=1)
+
+        # Visualize test set images, along with corresponding adversarial examples
+        show_image_row([im.cpu(), adv.cpu(), im_adv.cpu()],
+                       tlist=[[CLASS_DICT['CIFAR'][int(t)] for t in l] for l in [targets, targets, label_pred_adv]],
+                       fontsize=18,
+                       filename='/ws/external/adv_examples/adversarial_example_CIFAR.png')
+
+    return im
 
 
 def test_c(test_data, model, criterion, epoch, use_cuda):
