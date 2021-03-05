@@ -53,7 +53,7 @@ class PGDAttacker():
         label_offset = torch.randint_like(label, low=0, high=self.num_classes)
         return (label + label_offset) % self.num_classes
 
-    def attack(self, image_clean, label, model, original=False, mode='pgd', mean=0.0, std=0.5):
+    def attack(self, image_clean, label, model, original=False, mode='pgd'):
         if mode == 'pgd':
             return self.pgd_attack(image_clean, label, model, original=False)
         elif mode == "dct":
@@ -62,8 +62,10 @@ class PGDAttacker():
             return self.common_attack(image_clean, label, model, original=False)
         elif mode == "advbn":
             return self.advbn_attack(image_clean, label, model, original=False)
-        elif mode == "noise":
-            return self.gaussian_noise_attack(image_clean, label, mean, std)
+        elif mode == "gnoise":
+            return self.gaussian_noise_attack(image_clean, label, mean=0.0, std=0.5)
+        elif mode == "unoise":
+            return self.uniform_noise_attack(image_clean, label, interval=1.5)
 
     def pgd_attack(self, image_clean, label, model, original=False):
         """
@@ -110,6 +112,19 @@ class PGDAttacker():
         target_label = label
         ori_images = x.clone().detach()
         noise = torch.randn(x.size()) * std + mean
+        noise = noise.cuda()
+        adv = x + noise
+
+        return adv, target_label
+
+
+    def uniform_noise_attack(self, x, label, interval):
+        """
+        aux_images, _ = self.attacker.attack(x, labels, mean, std)
+        """
+        target_label = label
+        ori_images = x.clone().detach()
+        noise = torch.rand(x.size()) * interval - interval / 2
         noise = noise.cuda()
         adv = x + noise
 
