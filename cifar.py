@@ -158,7 +158,9 @@ def main():
     else:
         attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size,
                                num_classes=args.num_classes,
-                               prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+                               prob_start_from_clean=0.2 if not args.evaluate else 0.0,
+                               dct_ratio_low=args.dct_ratio_low,
+                               dct_ratio_high=args.dct_ratio_high)
 
 
     if not os.path.isdir(args.checkpoint):

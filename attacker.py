@@ -33,7 +33,8 @@ class NoOpAttacker():
 
 
 class PGDAttacker():
-    def __init__(self, num_iter, epsilon, step_size, kernel_size=15, prob_start_from_clean=0.0, translation=False, num_classes=1000, device='cuda:0'):
+    def __init__(self, num_iter, epsilon, step_size, kernel_size=15, prob_start_from_clean=0.0, translation=False, num_classes=1000, device='cuda:0',
+                 dct_ratio_low=0.0, dct_ratio_high=1.0):
         step_size = max(step_size, epsilon / num_iter)
         self.num_iter = num_iter
         self.epsilon = epsilon * IMAGE_SCALE
@@ -42,6 +43,8 @@ class PGDAttacker():
         self.device = device
         self.translation = translation
         self.num_classes = num_classes
+        self.dct_ratio_low = dct_ratio_low
+        self.dct_ratio_high = dct_ratio_high
         # self.dg = SMNorm(3, 3, groups=3)
         # self.gblur = CustomBlurPool(3, 3, 5, )
 
@@ -255,7 +258,7 @@ class PGDAttacker():
         return adv_sigma * image_clean + adv_mean * image_mean, target_label
 
 
-    def pgd_dct_attack(self, image_clean, label, model, original=False, dct_ratio_low=0.0, dct_ratio_high=1.0):
+    def pgd_dct_attack(self, image_clean, label, model, original=False):
         """
         dct attack gradient
         # aux_images, _ = self.attacker.dct_attack(x, labels, self._forward_impl,
@@ -275,9 +278,9 @@ class PGDAttacker():
         init_start = torch.empty_like(image_clean).uniform_(-self.epsilon, self.epsilon)
         B, C, H, W = image_clean.size()
         # dct_ratio_low bound
-        init_start[:, :, :int(dct_ratio_low * H), :int(dct_ratio_low * W)] = 0
+        init_start[:, :, :int(self.dct_ratio_low * H), :int(self.dct_ratio_low * W)] = 0
         # dct_ratio_high bound
-        init_start[:, :, int(dct_ratio_high * H):, int(dct_ratio_high * W):] = 0
+        init_start[:, :, int(self.dct_ratio_high * H):, int(self.dct_ratio_high * W):] = 0
         # idct 2d
         init_start = dct.idct_2d(init_start)
 
@@ -293,8 +296,8 @@ class PGDAttacker():
                                     retain_graph=False, create_graph=False)[0]
             # Linf freq project
             dct_g = dct.dct_2d(g)
-            dct_g[:, :, :int(dct_ratio_low * H), :int(dct_ratio_low * W):] = 0
-            dct_g[:, :, int(dct_ratio_high * H):, int(dct_ratio_high * W):] = 0
+            dct_g[:, :, :int(self.dct_ratio_low * H), :int(self.dct_ratio_low * W):] = 0
+            dct_g[:, :, int(self.dct_ratio_high * H):, int(self.dct_ratio_high * W):] = 0
             g = dct.idct_2d(dct_g)
             if self.translation:
                 g = self.conv(g)
