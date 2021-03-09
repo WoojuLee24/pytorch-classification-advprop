@@ -73,7 +73,7 @@ class PGDAttacker():
         elif mode == "gnoise":
             return self.gaussian_noise_attack(image_clean, label, mean=0.0, std=0.5)
         elif mode == "unoise":
-            return self.uniform_noise_attack(image_clean, label, interval=1.5)
+            return self.uniform_noise_attack(image_clean, label)
         elif mode == "dummy" or "sm" or "sm-lf":
             return self.dummy_attack(image_clean, label)
 
