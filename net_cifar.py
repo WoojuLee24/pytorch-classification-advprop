@@ -4,6 +4,7 @@ import torch.nn as nn
 from functools import partial
 
 from attacker import PGDAttacker, NoOpAttacker
+from attack_helper import *
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -157,6 +158,7 @@ class ResNet(nn.Module):
                                bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
+        self.conv2 = MixConv2d(self.inplanes, self.inplanes, kernel_size=5, groups=self.inplanes, stride=1, padding=(2, 2))
         self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
                                        dilate=replace_stride_with_dilation[0])
@@ -213,6 +215,7 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        x = self.conv2(x)
 
         x = self.layer1(x)
         x = self.layer2(x)

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 import torch_dct as dct
+from attack_helper import *
 IMAGE_SCALE = 2.0/255
 
 
@@ -41,6 +42,9 @@ class PGDAttacker():
         self.device = device
         self.translation = translation
         self.num_classes = num_classes
+        # self.dg = SMNorm(3, 3, groups=3)
+        # self.gblur = CustomBlurPool(3, 3, 5, )
+
         if translation:
             # this is equivalent to deepth wise convolution
             # details can be found in the docs of Conv2d.
@@ -56,8 +60,12 @@ class PGDAttacker():
     def attack(self, image_clean, label, model, original=False, mode='pgd'):
         if mode == 'pgd':
             return self.pgd_attack(image_clean, label, model, original=False)
-        elif mode == "dct":
-            return self.dct_attack(image_clean, label, model, original=False)
+        elif mode == "pgd_dct":
+            return self.pgd_dct_attack(image_clean, label, model, original=False)
+        elif mode == "dg":
+            return self.dg_attack(image_clean, label, model, original=False)
+        elif mode == "gblur":
+            return self.gblur_attack(image_clean, label, model, original=False)
         elif mode == "common":
             return self.common_attack(image_clean, label, model, original=False)
         elif mode == "advbn":
@@ -66,6 +74,8 @@ class PGDAttacker():
             return self.gaussian_noise_attack(image_clean, label, mean=0.0, std=0.5)
         elif mode == "unoise":
             return self.uniform_noise_attack(image_clean, label, interval=1.5)
+        elif mode == "dummy" or "sm" or "sm-lf":
+            return self.dummy_attack(image_clean, label)
 
     def pgd_attack(self, image_clean, label, model, original=False):
         """
@@ -118,17 +128,30 @@ class PGDAttacker():
         return adv, target_label
 
 
-    def uniform_noise_attack(self, x, label, interval):
+    def uniform_noise_attack(self, x, label):
         """
         aux_images, _ = self.attacker.attack(x, labels, mean, std)
         """
         target_label = label
         ori_images = x.clone().detach()
+        interval = self.epsilon
         noise = torch.rand(x.size()) * interval - interval / 2
         noise = noise.cuda()
         adv = x + noise
 
         return adv, target_label
+
+    def dummy_attack(self, x, label):
+        return x, label
+
+    def dg_attack(self, x, label):
+        x = self.dg(x)
+        return x, label
+
+    def gblur_attack(self, x, label):
+        x = self.gblur(x)
+        return x, label
+
 
 
     def common_attack(self, image_clean, label, model, original=False):
@@ -232,7 +255,7 @@ class PGDAttacker():
         return adv_sigma * image_clean + adv_mean * image_mean, target_label
 
 
-    def dct_attack(self, image_clean, label, model, original=False, dct_ratio_low=0.0, dct_ratio_high=1.0):
+    def pgd_dct_attack(self, image_clean, label, model, original=False, dct_ratio_low=0.0, dct_ratio_high=1.0):
         """
         dct attack gradient
         # aux_images, _ = self.attacker.dct_attack(x, labels, self._forward_impl,
