@@ -5,6 +5,7 @@ from functools import partial
 
 from attacker import PGDAttacker, NoOpAttacker
 from attack_helper import *
+from models.stem_helper import *
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -137,10 +138,12 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None):
+                 norm_layer=None, conv_layer=None):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
+        if conv_layer is None:
+            conv_layer = ResStemCifar
         self._norm_layer = norm_layer
 
         self.inplanes = 64
@@ -154,10 +157,10 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1,
-                               bias=False)
-        self.bn1 = norm_layer(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
+        self.stem = conv_layer(3, self.inplanes, norm_layer)
+        # self.conv1 = conv_layer(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+        # self.bn1 = norm_layer(self.inplanes)
+        # self.relu = nn.ReLU(inplace=True)
         # self.conv2 = MixConv2d(self.inplanes, self.inplanes, kernel_size=5, groups=self.inplanes, stride=1, padding=(2, 2))
         self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
@@ -186,6 +189,7 @@ class ResNet(nn.Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
+
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
         downsample = None
@@ -212,10 +216,10 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, x):
         # See note [TorchScript super()]
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        # x = self.conv2(x)
+        # x = self.conv1(x)
+        # x = self.bn1(x)
+        # x = self.relu(x)
+        x = self.stem(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -241,11 +245,11 @@ class AdvResNet(ResNet):
     '''
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0, make_adv=False,
+                 norm_layer=None, conv_layer=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0, make_adv=False,
                  attack_mode='pgd'):
         super().__init__(block, layers, num_classes=num_classes, zero_init_residual=zero_init_residual,
                  groups=groups, width_per_group=width_per_group, replace_stride_with_dilation=replace_stride_with_dilation,
-                 norm_layer=norm_layer)
+                 norm_layer=norm_layer, conv_layer=conv_layer)
         self.attacker = attacker
         self.mixbn = False
         self.attack_mode = attack_mode

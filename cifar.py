@@ -38,7 +38,7 @@ from utils.fastaug.fastaug import FastAugmentation
 from utils.fastaug.augmentations import Lighting
 from utils.misc import show_image_row
 from utils.label_maps import CLASS_DICT
-
+from models.stem_helper import *
 
 def to_status(m, status):
     if hasattr(m, 'batch_type'):
@@ -116,6 +116,8 @@ parser.add_argument('--warm', default=5, type=int, help='warm up epochs')
 parser.add_argument('--warm_lr', default=0.1, type=float, help='warm up start lr')
 parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--mixbn', action='store_true', help='use mixbn')
+parser.add_argument('--mixconv', action='store_true', help='use mixconv')
+
 parser.add_argument('--lr_schedule', type=str, default='step', choices=['step', 'cos'])
 parser.add_argument('--fastaug', action='store_true')
 parser.add_argument('--already224', action='store_true')
@@ -199,7 +201,13 @@ def main():
     else:
         norm_layer = None
 
-    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer,
+    if args.mixconv:
+        conv_layer = ResStemCifarDCT
+    else:
+        conv_layer = ResStemCifar
+
+
+    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, conv_layer=conv_layer,
                                           dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
                                           make_adv=args.make_adv, attack_mode=args.attack_mode)
     model.set_attacker(attacker)
@@ -629,6 +637,37 @@ class MixBatchNorm2d(nn.BatchNorm2d):
         return input
 
 
+class MixConv2d(nn.Conv2d):
+    '''
+    if the dimensions of the tensors from dataloader is [N, 3, 224, 224]
+    that of the inputs of the MixBatchNorm2d should be [2*N, 3, 224, 224].
+
+    If you set batch_type as 'mix', this network will using one conv (main bn) to calculate the features corresponding to[:N, 3, 224, 224],
+    while using another batch normalization (auxiliary bn) for the features of [N:, 3, 224, 224].
+    During training, the batch_type should be set as 'mix'.
+
+    During validation, we only need the results of the features using some specific conv.
+    if you set batch_type as 'clean', the features are calculated using main bn; if you set it as 'adv', the features are calculated using auxiliary bn.
+
+    Usually, we use to_clean_status, to_adv_status, and to_mix_status to set the batch_type recursively. It should be noticed that the batch_type should be set as 'adv' while attacking.
+    '''
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False, groups=1):
+        super(MixConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, bias=bias, groups=1)
+        self.aux_conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias, groups=1)
+        self.batch_type = 'clean'
+
+    def forward(self, input):
+        if self.batch_type == 'adv':
+            input = self.aux_conv(input)
+        elif self.batch_type == 'clean':
+            input = super(MixConv2d, self).forward(input)
+        else:
+            assert self.batch_type == 'mix'
+            batch_size = input.shape[0]
+            input0 = super(MixConv2d, self).forward(input[:batch_size // 2])
+            input1 = self.aux_conv(input[batch_size // 2:])
+            input = torch.cat((input0, input1), 0)
+        return input
 
 
 if __name__ == '__main__':
