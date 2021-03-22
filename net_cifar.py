@@ -138,12 +138,12 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, conv_layer=None):
+                 norm_layer=None, stem=None, dct_ratio_low=0.0, dct_ratio_high=1.0):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        if conv_layer is None:
-            conv_layer = ResStemCifar
+        if stem is None:
+            stem = ResStemCifar
         self._norm_layer = norm_layer
 
         self.inplanes = 64
@@ -157,7 +157,7 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.stem = conv_layer(3, self.inplanes, norm_layer)
+        self.stem = stem(3, self.inplanes, norm_layer)
         # self.conv1 = conv_layer(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         # self.bn1 = norm_layer(self.inplanes)
         # self.relu = nn.ReLU(inplace=True)
@@ -245,11 +245,11 @@ class AdvResNet(ResNet):
     '''
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, conv_layer=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0, make_adv=False,
+                 norm_layer=None, stem=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0, make_adv=False,
                  attack_mode='pgd'):
         super().__init__(block, layers, num_classes=num_classes, zero_init_residual=zero_init_residual,
                  groups=groups, width_per_group=width_per_group, replace_stride_with_dilation=replace_stride_with_dilation,
-                 norm_layer=norm_layer, conv_layer=conv_layer)
+                 norm_layer=norm_layer, stem=stem, dct_ratio_low=0.0, dct_ratio_high=1.0)
         self.attacker = attacker
         self.mixbn = False
         self.attack_mode = attack_mode

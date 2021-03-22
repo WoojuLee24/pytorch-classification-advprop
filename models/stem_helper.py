@@ -59,7 +59,7 @@ class ResStemCifarSM(nn.Module):
 class ResStemCifarDCT(nn.Module):
     """ResNet stem for CIFAR: 3x3, BN, AF."""
 
-    def __init__(self, w_in, w_out, norm_layer):
+    def __init__(self, w_in, w_out, norm_layer, dct_ratio_low=0.0, dct_ratio_high=0.25):
         super(ResStemCifarDCT, self).__init__()
         self.conv = nn.Conv2d(w_in, w_out, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
@@ -67,8 +67,8 @@ class ResStemCifarDCT(nn.Module):
         self.aux_bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
         self.af = nn.ReLU()
         self.batch_type = 'clean'
-        self.dct_ratio_low = 0.0
-        self.dct_ratio_high = 1.0
+        self.dct_ratio_low = dct_ratio_low
+        self.dct_ratio_high = dct_ratio_high
 
     def forward(self, x):
         if self.batch_type == 'adv':

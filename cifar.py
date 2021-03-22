@@ -116,7 +116,7 @@ parser.add_argument('--warm', default=5, type=int, help='warm up epochs')
 parser.add_argument('--warm_lr', default=0.1, type=float, help='warm up start lr')
 parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--mixbn', action='store_true', help='use mixbn')
-parser.add_argument('--mixconv', action='store_true', help='use mixconv')
+parser.add_argument('--mixstem', action='store_true', help='use mixstem')
 
 parser.add_argument('--lr_schedule', type=str, default='step', choices=['step', 'cos'])
 parser.add_argument('--fastaug', action='store_true')
@@ -201,13 +201,13 @@ def main():
     else:
         norm_layer = None
 
-    if args.mixconv:
-        conv_layer = ResStemCifarDCT
+    if args.mixstem:
+        stem = ResStemCifarDCT
     else:
-        conv_layer = ResStemCifar
+        stem = ResStemCifar
 
 
-    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, conv_layer=conv_layer,
+    model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, stem=stem,
                                           dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
                                           make_adv=args.make_adv, attack_mode=args.attack_mode)
     model.set_attacker(attacker)
