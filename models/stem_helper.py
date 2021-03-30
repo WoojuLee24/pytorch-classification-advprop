@@ -172,7 +172,7 @@ class SM(nn.Conv2d):
     def forward(self, x):
         # x = F.conv2d(x, self.param, stride=self.stride, padding=self.padding, groups=self.groups)
         x = self.replication_pad(x)
-        x = F.conv2d(x, self.kernel, stride=self.stride, groups=self.groups)
+        x = F.conv2d(x, self.kernel.to(x.device), stride=self.stride, groups=self.groups)
         return x
 
 
