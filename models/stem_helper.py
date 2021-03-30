@@ -151,7 +151,7 @@ class SM(nn.Conv2d):
         self.stride = stride
         self.groups = groups
         self.replication_pad = nn.ReplicationPad2d(padding)
-        self.param = self.get_param(in_channels, out_channels, kernel_size, groups)
+        self.kernel = self.get_param(in_channels, out_channels, kernel_size, groups)
 
     def get_name(self):
         return type(self).__name__
@@ -172,7 +172,7 @@ class SM(nn.Conv2d):
     def forward(self, x):
         # x = F.conv2d(x, self.param, stride=self.stride, padding=self.padding, groups=self.groups)
         x = self.replication_pad(x)
-        x = F.conv2d(x, self.param, stride=self.stride, groups=self.groups)
+        x = F.conv2d(x, self.kernel, stride=self.stride, groups=self.groups)
         return x
 
 
