@@ -29,7 +29,7 @@ class ResStemCifarSM(nn.Module):
         self.aux_conv = nn.Conv2d(w_in, w_out, kernel_size=3, stride=1, padding=1, bias=False)
         self.aux_bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
         self.af = nn.ReLU()
-        self.sm = SM(w_out, w_out, kernel_size=5, stride=2, groups=w_out)
+        self.sm = SM(w_out, w_out, kernel_size=5, stride=1, groups=w_out)
         self.batch_type = 'clean'
 
     def forward(self, x):
@@ -171,7 +171,7 @@ class SM(nn.Conv2d):
 
     def forward(self, x):
         # x = F.conv2d(x, self.param, stride=self.stride, padding=self.padding, groups=self.groups)
-        x = self.reflection_pad(x)
+        x = self.replication_pad(x)
         x = F.conv2d(x, self.param, stride=self.stride, groups=self.groups)
         return x
 

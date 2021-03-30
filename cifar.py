@@ -116,7 +116,9 @@ parser.add_argument('--warm', default=5, type=int, help='warm up epochs')
 parser.add_argument('--warm_lr', default=0.1, type=float, help='warm up start lr')
 parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--mixbn', action='store_true', help='use mixbn')
-parser.add_argument('--mixstem', action='store_true', help='use mixstem')
+# parser.add_argument('--mixstem', action='store_true', help='use mixstem')
+parser.add_argument('--mixstem', default='', type=str, help='mixstem type')
+
 
 parser.add_argument('--lr_schedule', type=str, default='step', choices=['step', 'cos'])
 parser.add_argument('--fastaug', action='store_true')
@@ -201,8 +203,10 @@ def main():
     else:
         norm_layer = None
 
-    if args.mixstem:
+    if args.mixstem =='dct':
         stem = ResStemCifarDCT
+    elif args.mixstem =='sm':
+        stem = ResStemCifarSM
     else:
         stem = ResStemCifar
 
