@@ -140,6 +140,114 @@ class ResStemCifarDCT2(nn.Module):
         return x
 
 
+class ResStem(nn.Module):
+    """ResNet stem for CIFAR: 3x3, BN, AF."""
+
+    def __init__(self, w_in, w_out, norm_layer):
+        super(ResStem, self).__init__()
+        self.conv = nn.Conv2d(w_in, w_out, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn = norm_layer(w_out)
+        self.af = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x):
+        for layer in self.children():
+            x = layer(x)
+        return x
+
+
+class ResStemSM(nn.Module):
+    """ResNet stem for CIFAR: 3x3, BN, AF."""
+
+    def __init__(self, w_in, w_out, norm_layer):
+        super(ResStemSM, self).__init__()
+        self.conv = nn.Conv2d(w_in, w_out, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
+        self.aux_conv = nn.Conv2d(w_in, w_out, kernel_size=7, stride=2, padding=3, bias=False)
+        self.aux_bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
+        self.af = nn.ReLU()
+        self.sm = SM(w_out, w_out, kernel_size=5, stride=1, groups=w_out)
+        self.batch_type = 'clean'
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x):
+        if self.batch_type == 'adv':
+            x = self.aux_conv(x)
+            x = self.aux_bn(x)
+            x = self.af(x)
+            x = self.maxpool(x)
+
+        elif self.batch_type == 'clean':
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.af(x)
+            x = self.maxpool(x)
+
+        else:
+            assert self.batch_type == 'mix'
+            batch_size = x.shape[0]
+            x0 = self.conv(x[:batch_size // 2])
+            x0 = self.bn(x0)
+            x0 = self.af(x0)
+            x1 = self.aux_conv(x[batch_size // 2:])
+            x1 = self.aux_bn(x1)
+            x1 = self.af(x1)
+            x1 = self.sm(x1)
+            x = torch.cat((x0, x1), 0)
+            x = self.maxpool(x)
+
+        return x
+
+
+class ResStemDCT(nn.Module):
+    """ResNet stem for CIFAR: 3x3, BN, AF."""
+
+    def __init__(self, w_in, w_out, norm_layer, dct_ratio_low=0.0, dct_ratio_high=0.25):
+        super(ResStemDCT, self).__init__()
+        self.conv = nn.Conv2d(w_in, w_out, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
+        self.aux_conv = nn.Conv2d(w_in, w_out, kernel_size=7, stride=2, padding=3, bias=False)
+        self.aux_bn = nn.BatchNorm2d(w_out, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
+        self.af = nn.ReLU()
+        self.batch_type = 'clean'
+        self.dct_ratio_low = dct_ratio_low
+        self.dct_ratio_high = dct_ratio_high
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x):
+        if self.batch_type == 'adv':
+            x = self.aux_conv(x)
+            x = self.aux_bn(x)
+            x = self.af(x)
+            x = self.maxpool(x)
+
+        elif self.batch_type == 'clean':
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.af(x)
+            x = self.maxpool(x)
+
+        else:
+            assert self.batch_type == 'mix'
+            batch_size = x.shape[0]
+            x0 = self.conv(x[:batch_size // 2])
+            x0 = self.bn(x0)
+            x0 = self.af(x0)
+            x1 = self.aux_conv(x[batch_size // 2:])
+            x1 = self.aux_bn(x1)
+            x1 = self.af(x1)
+            x1 = dct.dct_2d(x1)
+            B, C, H, W = x1.size()
+            x1[:, :, :int(self.dct_ratio_low * H), :int(self.dct_ratio_low * W)] = 0
+            x1[:, :, int(self.dct_ratio_high * H):, int(self.dct_ratio_high * W):] = 0
+            x1 = dct.idct_2d(x1)
+
+            x = torch.cat((x0, x1), 0)
+            x = self.maxpool(x)
+
+        return x
+
+
 
 class SM(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size=(5, 5), stride=1, padding=2, dilation=1, bias=True, groups=1):
