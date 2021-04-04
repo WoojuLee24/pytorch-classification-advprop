@@ -65,6 +65,8 @@ class PGDAttacker():
             return self.pgd_attack(image_clean, label, model, original=False)
         elif mode == "pgd_dct":
             return self.pgd_dct_attack(image_clean, label, model, original=False)
+        elif mode == "attention":
+            return self.attention_attack(image_clean, label, model, original=False)
         elif mode == "dg":
             return self.dg_attack(image_clean, label, model, original=False)
         elif mode == "gblur":
@@ -79,6 +81,7 @@ class PGDAttacker():
             return self.uniform_noise_attack(image_clean, label)
         elif mode == "dummy" or "sm" or "sm-lf":
             return self.dummy_attack(image_clean, label)
+
 
     def pgd_attack(self, image_clean, label, model, original=False):
         """
@@ -117,6 +120,89 @@ class PGDAttacker():
             adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
         
         return adv, target_label
+
+    def attention_attack(self, image_clean, label, model, original=False):
+        """
+        aux_images, _ = self.attacker.attack(x, labels, self._forward_impl)
+        init_start = torch.ones_like
+        """
+        if original:
+            target_label = label  # untargeted
+        else:
+            target_label = self._create_random_target(label)  # targeted
+        lower_bound = torch.clamp(image_clean - self.epsilon, min=-1., max=1.)
+        upper_bound = torch.clamp(image_clean + self.epsilon, min=-1., max=1.)
+
+        ori_images = image_clean.clone().detach()
+        attention = torch.ones_like(image_clean)
+        attention_sigmoid = 2 * F.sigmoid(attention)
+        adv = image_clean
+
+        for i in range(self.num_iter):
+            # adv =
+            k.requires_grad = True
+            logits = model(adv)
+            losses = F.cross_entropy(logits, target_label)
+            g = torch.autograd.grad(losses, k,
+                                    retain_graph=False, create_graph=False)[0]
+            if self.translation:
+                g = self.conv(g)
+            # Linf step
+            if original:
+                adv = adv + torch.sign(g) * self.step_size  # untargeted
+            else:
+                adv = adv - torch.sign(g) * self.step_size  # targeted
+            # Linf project
+            adv = torch.where(adv > lower_bound, adv, lower_bound).detach()
+            adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
+
+        return adv, target_label
+
+
+    def attention_attack2(self, image_clean, label, model, original=False):
+        """
+        aux_images, _ = self.attacker.attack(x, labels, self._forward_impl)
+        init_start with episilon noise
+        """
+        if original:
+            target_label = label  # untargeted
+        else:
+            target_label = self._create_random_target(label)  # targeted
+        lower_bound = torch.clamp(image_clean - self.epsilon, min=-1., max=1.)
+        upper_bound = torch.clamp(image_clean + self.epsilon, min=-1., max=1.)
+
+        ori_images = image_clean.clone().detach()
+
+        init_start = torch.empty_like(image_clean).uniform_(-self.epsilon, self.epsilon)
+
+        start_from_noise_index = (torch.randn([]) > self.prob_start_from_clean).float()
+        k = start_from_noise_index * init_start
+        k_sigmoid = 2 * F.sigmoid(k)
+        # start_adv = image_clean + start_from_noise_index * init_start
+        start_adv = image_clean * k_sigmoid
+
+        adv = start_adv
+        for i in range(self.num_iter):
+            # adv.requires_grad = True
+            k.requires_grad = True
+            logits = model(adv)
+            losses = F.cross_entropy(logits, target_label)
+            g = torch.autograd.grad(losses, k,
+                                    retain_graph=False, create_graph=False)[0]
+            if self.translation:
+                g = self.conv(g)
+            # Linf step
+            if original:
+                adv = adv + torch.sign(g) * self.step_size  # untargeted
+            else:
+                adv = adv - torch.sign(g) * self.step_size  # targeted
+            # Linf project
+            adv = torch.where(adv > lower_bound, adv, lower_bound).detach()
+            adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
+
+        return adv, target_label
+
+
 
     def gaussian_noise_attack(self, x, label, mean, std):
         """

@@ -33,6 +33,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 from attacker import NoOpAttacker, PGDAttacker
 import net_cifar
+import net
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 from utils.fastaug.fastaug import FastAugmentation
 from utils.fastaug.augmentations import Lighting

@@ -103,6 +103,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-ec', '--evaluate-c', action='store_true',
                     help='evaluate corruption model on validation set')
+parser.add_argument('--make-adv', action='store_true',
+                    help='evaluation mode, make adversarial example')
 #Device options
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
@@ -122,8 +124,11 @@ parser.add_argument('--lighting', action='store_true')
 parser.add_argument('--smoothing', type=float, default=0)
 # added by HYC, attacker options
 parser.add_argument('--attack-iter', help='Adversarial attack iteration', type=int, default=0)
+parser.add_argument('--attack-mode', help='Adversarial attack mode', type=str, default='pgd')
 parser.add_argument('--attack-epsilon', help='Adversarial attack maximal perturbation', type=float, default=1.0)
 parser.add_argument('--attack-step-size', help='Adversarial attack step size', type=float, default=1.0)
+parser.add_argument('--dct-ratio-low', help='frequency range', type=float, default=0.0)
+parser.add_argument('--dct-ratio-high', help='frequency range', type=float, default=1.0)
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
@@ -149,7 +154,12 @@ def main():
     if args.attack_iter == 0:
         attacker = NoOpAttacker()
     else:
-        attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size, prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+        # attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size, prob_start_from_clean=0.2 if not args.evaluate else 0.0)
+        attacker = PGDAttacker(args.attack_iter, args.attack_epsilon, args.attack_step_size,
+                               num_classes=args.num_classes,
+                               prob_start_from_clean=0.2 if not args.evaluate else 0.0,
+                               dct_ratio_low=args.dct_ratio_low,
+                               dct_ratio_high=args.dct_ratio_high)
 
     if not os.path.isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
@@ -215,7 +225,10 @@ def main():
         norm_layer = MixBatchNorm2d
     else:
         norm_layer = None
-    model = net.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer)
+    # model = net.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer)
+    model = net.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer,
+                                          dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
+                                          make_adv=args.make_adv, attack_mode=args.attack_mode)
     model.set_attacker(attacker)
     model.set_mixbn(args.mixbn)
 
