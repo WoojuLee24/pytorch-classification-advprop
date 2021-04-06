@@ -6,6 +6,7 @@ from functools import partial
 from attacker import PGDAttacker, NoOpAttacker
 from attack_helper import *
 from models.stem_helper import *
+from models.gradcam_helper import GradCam
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -262,6 +263,7 @@ class AdvResNet(ResNet):
     def set_mixbn(self, mixbn):
         self.mixbn = mixbn
 
+
     def forward(self, x, labels):
         training = self.training
         input_len = len(x)
@@ -273,7 +275,8 @@ class AdvResNet(ResNet):
                 images = x
                 targets = labels
             else:
-                aux_images, _ = self.attacker.attack(x, labels, self._forward_impl, False, self.attack_mode)
+                # aux_images, _ = self.attacker.attack(x, labels, self._forward_impl, False, self.attack_mode)
+                aux_images, _ = self.attacker.attack(x, labels, self, False, self.attack_mode)
                 images = torch.cat([x, aux_images], dim=0)
                 targets = torch.cat([labels, labels], dim=0)
             self.train()
@@ -318,8 +321,12 @@ class AdvResNet(ResNet):
 
 
 
-def _resnet(arch, block, layers, pretrained, progress, **kwargs):
+def _resnet(arch, block, layers, pretrained, progress, attack_mode, **kwargs):
     model = AdvResNet(block, layers, **kwargs)
+    # if attack_mode == "gradcam_attention":
+    #     target_layer = "module.layer4.2.conv3"
+    #     GradCam(model, target_layer)
+
     if pretrained:
         raise ValueError('do not set pretrained as True, since we aim at training from scratch')
         # state_dict = load_state_dict_from_url(model_urls[arch],

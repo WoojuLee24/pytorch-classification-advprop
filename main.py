@@ -174,8 +174,8 @@ def main():
 
     print('==> Preparing data..')
 
-    k = (args.data).split("/")[-1]
-    if k == "cifar10":
+    dataset_name = (args.data).split("/")[-1]
+    if dataset_name == "cifar10":
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -218,7 +218,7 @@ def main():
         model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, stem=stem,
                                               dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
                                               make_adv=args.make_adv, attack_mode=args.attack_mode)
-    elif k == "imagenet":
+    elif dataset_name == "imagenet":
         # Data loading code
         traindir = os.path.join(args.data, 'train')
         valdir = os.path.join(args.data, 'val')

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch_dct as dct
 from attack_helper import *
+from models.gradcam_helper import *
 IMAGE_SCALE = 2.0/255
 
 
@@ -30,6 +31,9 @@ class NoOpAttacker():
     
     def attack(self, image, label, model):
         return image, -torch.ones_like(label)
+
+    def set_model(self, model):
+        self.model = model
 
 
 class PGDAttacker():
@@ -62,19 +66,21 @@ class PGDAttacker():
 
     def attack(self, image_clean, label, model, original=False, mode='pgd'):
         if mode == 'pgd':
-            return self.pgd_attack(image_clean, label, model, original=False)
+            return self.pgd_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "pgd_dct":
-            return self.pgd_dct_attack(image_clean, label, model, original=False)
+            return self.pgd_dct_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "attention":
-            return self.attention_attack(image_clean, label, model, original=False)
+            return self.attention_attack(image_clean, label, model._forward_impl, original=False)
+        elif mode == "gradcam_attention":
+            return self.gradcam_attention_attack(image_clean, label, model, original=False)
         elif mode == "dg":
-            return self.dg_attack(image_clean, label, model, original=False)
+            return self.dg_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "gblur":
-            return self.gblur_attack(image_clean, label, model, original=False)
+            return self.gblur_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "common":
-            return self.common_attack(image_clean, label, model, original=False)
+            return self.common_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "advbn":
-            return self.advbn_attack(image_clean, label, model, original=False)
+            return self.advbn_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "gnoise":
             return self.gaussian_noise_attack(image_clean, label, mean=0.0, std=0.5)
         elif mode == "unoise":
@@ -82,6 +88,8 @@ class PGDAttacker():
         elif mode == "dummy" or "sm" or "sm-lf":
             return self.dummy_attack(image_clean, label)
 
+    def set_model(self, model):
+        self.model = model
 
     def pgd_attack(self, image_clean, label, model, original=False):
         """
@@ -134,7 +142,7 @@ class PGDAttacker():
         upper_bound = torch.clamp(image_clean + self.epsilon, min=-1., max=1.)
 
         ori_images = image_clean.clone().detach()
-        attention = torch.ones_like(image_clean)
+        attention = torch.zeros_like(image_clean)
         attention_sigmoid = 2 * F.sigmoid(attention)
         adv = image_clean
 
@@ -202,7 +210,17 @@ class PGDAttacker():
 
         return adv, target_label
 
+    def gradcam_attention_attack(self, x, label, model, target_layer="module.layer4.2.conv3", original=False):
+        if original:
+            target_label = label  # untargeted
+        else:
+            target_label = self._create_random_target(label)  # targeted
 
+        for i in range(self.num_iter):
+            grad_cam = GradCam(model, target_layer=target_layer)
+            cam = grad_cam.generate_cam(x, label)
+
+        return cam, target_label
 
     def gaussian_noise_attack(self, x, label, mean, std):
         """

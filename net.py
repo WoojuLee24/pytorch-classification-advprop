@@ -251,6 +251,11 @@ class AdvResNet(ResNet):
                  norm_layer=norm_layer, stem=stem)
         self.attacker = attacker 
         self.mixbn = False
+        self.attack_mode = attack_mode
+        self.dct_ratio_low = dct_ratio_low
+        self.dct_ratio_high = dct_ratio_high
+        self.make_adv = make_adv
+
     
     def set_attacker(self, attacker):
         self.attacker = attacker
@@ -269,7 +274,8 @@ class AdvResNet(ResNet):
                 images = x
                 targets = labels 
             else:
-                aux_images, _ = self.attacker.attack(x, labels, self._forward_impl)
+                # aux_images, _ = self.attacker.attack(x, labels, self)
+                aux_images, _ = self.attacker.attack(x, labels, self, False, self.attack_mode)
                 images = torch.cat([x, aux_images], dim=0)
                 targets = torch.cat([labels, labels], dim=0)
             self.train()
@@ -292,6 +298,7 @@ class AdvResNet(ResNet):
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = AdvResNet(block, layers, **kwargs)
+
     if pretrained:
         raise ValueError('do not set pretrained as True, since we aim at training from scratch')
         # state_dict = load_state_dict_from_url(model_urls[arch],
