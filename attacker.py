@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch_dct as dct
 from attack_helper import *
-from models.gradcam_helper import *
+from models.gradcam_helper import GradCam
 IMAGE_SCALE = 2.0/255
 
 
