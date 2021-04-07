@@ -606,7 +606,7 @@ def test_c(test_data, model, criterion, epoch, use_cuda):
     for corruption in CORRUPTIONS:
         # Reference to original data is mutated
         test_data.data = np.load(os.path.join(args.data + "-c", corruption + '.npy'))
-        test_data.targets = torch.LongTensor(np.load(os.path.join(args.data, "cifar10-c", 'labels.npy')))
+        test_data.targets = torch.LongTensor(np.load(os.path.join(args.data + "-c", 'labels.npy')))
 
         test_loader = torch.utils.data.DataLoader(
             test_data,
