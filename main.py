@@ -172,6 +172,9 @@ def main():
     if not os.path.isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
 
+    writer = SummaryWriter(log_dir=args.checkpoint)
+
+
     print('==> Preparing data..')
 
     dataset_name = (args.data).split("/")[-1]
@@ -217,7 +220,7 @@ def main():
 
         model = net_cifar.__dict__[args.arch](num_classes=args.num_classes, norm_layer=norm_layer, stem=stem,
                                               dct_ratio_low=args.dct_ratio_low, dct_ratio_high=args.dct_ratio_high,
-                                              make_adv=args.make_adv, attack_mode=args.attack_mode)
+                                              make_adv=args.make_adv, attack_mode=args.attack_mode, writer=writer)
     elif dataset_name == "imagenet":
         # Data loading code
         traindir = os.path.join(args.data, 'train')
@@ -366,7 +369,7 @@ def main():
         return
 
     # Train and val
-    writer = SummaryWriter(log_dir=args.checkpoint)
+    # writer = SummaryWriter(log_dir=args.checkpoint)
     warmup_scheduler = WarmUpLR(optimizer, len(train_loader) * args.warm,
                                 start_lr=args.warm_lr) if args.warm > 0 else None
     for epoch in range(start_epoch, args.epochs):
@@ -438,6 +441,7 @@ def train(train_loader, model, criterion, optimizer, epoch, use_cuda, warmup_sch
 
     bar = Bar('Processing', max=len(train_loader))
     for batch_idx, (inputs, targets) in enumerate(train_loader):
+
         if epoch < args.warm:
             warmup_scheduler.step()
         elif args.lr_schedule == 'cos':
@@ -453,6 +457,7 @@ def train(train_loader, model, criterion, optimizer, epoch, use_cuda, warmup_sch
         # the advprop part is done inside forward function.
         # if the advprop part is set outside the forward function, the way to concatenate the batches costs
         # more time. (around 10 minutes per epoch)
+
         outputs, targets = model(inputs, targets)
         if args.mixbn:
             outputs = outputs.transpose(1, 0).contiguous().view(-1, args.num_classes)

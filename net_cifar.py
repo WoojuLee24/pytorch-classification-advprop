@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 # from torchvision.models.utils import load_state_dict_from_url
 from functools import partial
-
 from attacker import PGDAttacker, NoOpAttacker
 from attack_helper import *
 from models.stem_helper import *
 from models.gradcam_helper import GradCam
+import torchvision.transforms as transforms
+from utils.misc import show_image_row
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -246,7 +247,7 @@ class AdvResNet(ResNet):
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None, stem=None, attacker=NoOpAttacker(), dct_ratio_low=0.0, dct_ratio_high=1.0, make_adv=False,
-                 attack_mode='pgd'):
+                 attack_mode='pgd', writer=None):
         super().__init__(block, layers, num_classes=num_classes, zero_init_residual=zero_init_residual,
                  groups=groups, width_per_group=width_per_group, replace_stride_with_dilation=replace_stride_with_dilation,
                  norm_layer=norm_layer, stem=stem)
@@ -256,6 +257,8 @@ class AdvResNet(ResNet):
         self.dct_ratio_low = dct_ratio_low
         self.dct_ratio_high = dct_ratio_high
         self.make_adv = make_adv
+        self.writer = writer
+        self.unnormalize = transforms.Normalize((-0.4914 / 0.2023, -0.4822 / 0.1994, -0.4465 / 0.2010), (1 / 0.2023, 1 / 0.1994, 1 / 0.2010))
 
     def set_attacker(self, attacker):
         self.attacker = attacker
@@ -279,6 +282,18 @@ class AdvResNet(ResNet):
                 aux_images, _ = self.attacker.attack(x, labels, self, False, self.attack_mode)
                 images = torch.cat([x, aux_images], dim=0)
                 targets = torch.cat([labels, labels], dim=0)
+                # if self.writer is not None:
+                #     # x = self.unnormalize(x)
+                #     aux_images_unnorm = self.unnormalize(aux_images[0])
+                #     x_unnorm = self.unnormalize(x[0])
+                #     #show_image_row()
+                #     self.writer.add_images('original image', x, 0)
+                #     self.writer.add_images('aux image', aux_images, 0)
+                #     self.writer.add_image('original image_unnorm', x_unnorm, 0)
+                #     self.writer.add_image ('aux image_unnorm', aux_images_unnorm, 0)
+
+
+
             self.train()
             if self.mixbn:
                 # the DataParallel usually cat the outputs along the first dimension simply,

@@ -216,11 +216,11 @@ class PGDAttacker():
         else:
             target_label = self._create_random_target(label)  # targeted
 
-        for i in range(self.num_iter):
-            grad_cam = GradCam(model, target_layer=target_layer)
-            cam = grad_cam.generate_cam(x, label)
+        grad_cam = GradCam(model, target_layer=target_layer,
+                           attack_iter=self.num_iter, attack_epsilon=self.epsilon, attack_step_size=self.step_size)
+        adv = grad_cam.generate_adv_cam(x, label)
 
-        return cam, target_label
+        return adv, target_label
 
     def gaussian_noise_attack(self, x, label, mean, std):
         """

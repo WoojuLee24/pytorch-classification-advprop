@@ -2,6 +2,7 @@ from PIL import Image
 import numpy as np
 import torch
 import json
+import torch.nn.functional as F
 
 from visualization.misc_functions import get_example, save_class_activation_images
 
@@ -10,10 +11,13 @@ class GradCam():
     """
         Produces class activation map
     """
-    def __init__(self, model, target_layer):
+    def __init__(self, model, target_layer, attack_iter=1, attack_epsilon=1, attack_step_size=1):
         self.model = model
         self.target_layer = target_layer
-        # self.model.eval()
+        self.attack_iter = attack_iter
+        self.attack_epsilon = attack_epsilon
+        self.attack_step_size = attack_step_size
+        self.model.eval()
         self.hook_layer()
 
     def hook_layer(self):
@@ -31,40 +35,57 @@ class GradCam():
                 m.register_backward_hook(backward_hook)
 
 
-    def generate_cam(self, input_image, target_class=None):
+    def generate_adv_cam(self, input_image, target_class=None):
         # Full forward pass
         # conv_output is the output of convolutions at specified layer
         # model_output is the final output of the model (1, 1000)
         # input image [1, 3, 224, 224]
         # cont_output [1, 256, 13, 13]
 
-        model_output, target_class = self.model(input_image, target_class)
-        if target_class is None:
-            target_class = np.argmax(model_output.data.numpy())
-        # Target for backprop
-        one_hot_output = torch.FloatTensor(1, model_output.size()[-1]).cuda().zero_()
-        one_hot_output[0][int(target_class)] = 1
-        # Zero grads
-        self.model.zero_grad()
-        # Backward pass with specified target
-        model_output.backward(gradient=one_hot_output, retain_graph=True)
-        # Get hooked gradients
-        guided_gradients = self.gradient.data.cpu().numpy()
-        # Get convolution outputs
-        target = self.conv_output.cpu().data.numpy()[0]
-        # Get weights from gradients
-        weights = np.mean(guided_gradients, axis=(1, 2))  # Take averages for each gradient
-        # Create empty numpy array for cam
-        cam = np.ones(target.shape[1:], dtype=np.float32)
-        # Multiply each weight with its conv output and then, sum
-        for i, w in enumerate(weights):
-            cam += w * target[i, :, :]
-        cam = np.maximum(cam, 0)
-        cam = (cam - np.min(cam)) / (np.max(cam) - np.min(cam))  # Normalize between 0-1
-        cam = np.uint8(cam * 255)  # Scale between 0-255 to visualize
-        cam = np.uint8(Image.fromarray(cam).resize((input_image.shape[3],
-                       input_image.shape[2]), Image.ANTIALIAS))/255
-        return cam
+        adv = input_image
+        B, C, H, W = input_image.size()
+        lower_bound = torch.clamp(input_image - self.attack_epsilon, min=-1., max=1.)
+        upper_bound = torch.clamp(input_image + self.attack_epsilon, min=-1., max=1.)
+        #         lower_bound = input_image - self.attack_epsilon
+        #         upper_bound = input_image + self.attack_epsilon
+
+        for i in range(self.attack_iter):
+
+            model_output, target_class = self.model(adv, target_class)
+            if target_class is None:
+                target_class = np.argmax(model_output.data.numpy())
+            # Target for backprop
+            one_hot_output = torch.zeros_like(model_output).cuda()
+            one_hot_output = torch.nn.functional.one_hot(targets, num_classes=10)
+
+            # Zero grads
+            self.model.zero_grad()
+            # Backward pass with specified target
+            model_output.backward(gradient=one_hot_output, retain_graph=True)
+            # Get hooked gradients
+            guided_gradients = self.gradient
+            # Get convolution outputs
+            target = self.conv_output
+            # Get weights from gradients
+            weights = guided_gradients.mean(dim=2, keepdim=True).mean(dim=3,
+                                                                      keepdim=True)
+            # Create empty numpy array for cam
+            cam = (target * weights).sum(dim=1, keepdim=True)
+            resized_cam = torch.nn.functional.interpolate(cam, (H, W), mode='bicubic')
+            resized_cam_mean = resized_cam.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+            resized_cam_std = resized_cam.std(dim=2, keepdim=True).std(dim=3, keepdim=True) * attack_epsilon
+
+            resized_cam2 = (resized_cam - resized_cam_mean) / (resized_cam_std + 1e-5)
+            # attention_map = F.sigmoid(resized_cam2)
+            adv_attention_map = F.sigmoid(-resized_cam2)
+
+            adv = adv * adv_attention_map.repeat(1, 3, 1, 1)
+
+            # Linf project
+            adv = torch.where(adv > lower_bound, adv, lower_bound).detach()
+            adv = torch.where(adv < upper_bound, adv, upper_bound).detach()
+
+        return adv
 
 if __name__ == '__main__':
     # target layer and label

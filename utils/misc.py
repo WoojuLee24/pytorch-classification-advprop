@@ -90,7 +90,8 @@ def get_axis(axarr, H, W, i, j):
     return ax
 
 
-def show_image_row(xlist, ylist=None, fontsize=12, size=(2.5, 2.5), tlist=None, filename=None):
+def show_image_row(xlist, ylist=None, fontsize
+=12, size=(2.5, 2.5), tlist=None, filename=None):
     H, W = len(xlist), len(xlist[0])
     fig, axarr = plt.subplots(H, W, figsize=(size[0] * W, size[1] * H))
     unnormalize = transforms.Normalize((-0.4914 / 0.2023, -0.4822 / 0.1994, -0.4465 / 0.2010), (1 / 0.2023, 1 / 0.1994, 1 / 0.2010))
