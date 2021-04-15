@@ -73,6 +73,8 @@ class PGDAttacker():
             return self.attention_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "gradcam_attention":
             return self.gradcam_attention_attack(image_clean, label, model, original=False)
+        elif mode == "gradcam_add_attention":
+            return self.gradcam_attention_add_attack(image_clean, label, model, original=False)
         elif mode == "dg":
             return self.dg_attack(image_clean, label, model._forward_impl, original=False)
         elif mode == "gblur":
@@ -219,6 +221,18 @@ class PGDAttacker():
         grad_cam = GradCam(model, target_layer=target_layer,
                            attack_iter=self.num_iter, attack_epsilon=self.epsilon, attack_step_size=self.step_size)
         adv = grad_cam.generate_adv_cam(x, label)
+
+        return adv, target_label
+
+    def gradcam_attention_add_attack(self, x, label, model, target_layer="module.layer4.2.conv3", original=False):
+        if original:
+            target_label = label  # untargeted
+        else:
+            target_label = self._create_random_target(label)  # targeted
+
+        grad_cam = GradCam(model, target_layer=target_layer,
+                           attack_iter=self.num_iter, attack_epsilon=self.epsilon, attack_step_size=self.step_size)
+        adv = grad_cam.generate_adv_add_cam(x, label)
 
         return adv, target_label
 
